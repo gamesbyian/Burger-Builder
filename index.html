@@ -27,31 +27,63 @@
         const { useState, useEffect, useCallback, useRef } = React;
 
         const BASE_INGREDIENTS = [
-            { type: 'top_bun', label: 'Crown', weight: 40 },
-            { type: 'bottom_bun', label: 'Heel', weight: 12 },
-            { type: 'patty', label: 'Patty', weight: 18 },
-            { type: 'cheese', label: 'Cheese', weight: 14 },
-            { type: 'lettuce', label: 'Lettuce', weight: 10 },
-            { type: 'tomato', label: 'Tomato', weight: 10 },
+            { type: 'top_bun', label: 'Crown', weight: 23 },
+            { type: 'bottom_bun', label: 'Heel', weight: 11 },
+            { type: 'patty', label: 'Patty', weight: 20 },
+            { type: 'cheese', label: 'Cheese', weight: 16 },
+            { type: 'lettuce', label: 'Lettuce', weight: 9 },
+            { type: 'tomato', label: 'Tomato', weight: 9 },
             { type: 'bacon', label: 'Bacon', weight: 7 },
-            { type: 'onion', label: 'Onion', weight: 6 },
-            { type: 'pickle', label: 'Pickle', weight: 6 },
-            { type: 'egg', label: 'Fried Egg', weight: 5 },
-            { type: 'ketchup', label: 'Ketchup', weight: 4 },
-            { type: 'mustard', label: 'Mustard', weight: 4 },
-            { type: 'mayo', label: 'Mayo', weight: 4 },
-            { type: 'spatula', label: 'Spatula', weight: 5 },
+            { type: 'onion', label: 'Onion', weight: 7 },
+            { type: 'pickle', label: 'Pickle', weight: 7 },
+            { type: 'egg', label: 'Fried Egg', weight: 7 },
+            { type: 'ketchup', label: 'Ketchup', weight: 7 },
+            { type: 'mustard', label: 'Mustard', weight: 7 },
+            { type: 'mayo', label: 'Mayo', weight: 7 },
+            { type: 'spatula', label: 'Spatula', weight: 4 },
         ];
 
-        const ROWS = 10;
+        const ROWS = 8;
+        const COLS = 6;
+        const FIRE_SPAWN_MIN = 20;
+        const FIRE_SPAWN_MAX = 30;
+        const FIRE_SPREAD_MIN = 3;
+        const FIRE_SPREAD_MAX = 4;
+        const SPOILT_CHANCE = 0.04;
+        const SPOILT_PREFIXES = ['Rotten', 'Slimy', 'Moldy'];
+        const SPOILABLE_TYPES = new Set([
+            'patty', 'cheese', 'lettuce', 'tomato', 'bacon', 'onion', 'pickle', 'egg', 'ketchup', 'mustard', 'mayo'
+        ]);
+
+        const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+        const spawnFireSettings = () => ({
+            untilSpawn: randomInt(FIRE_SPAWN_MIN, FIRE_SPAWN_MAX),
+            untilSpread: randomInt(FIRE_SPREAD_MIN, FIRE_SPREAD_MAX),
+        });
+
+        const maybeSpoilIngredient = (ingredient) => {
+            if (!SPOILABLE_TYPES.has(ingredient.type)) {
+                return { ...ingredient, isSpoilt: false };
+            }
+            if (Math.random() >= SPOILT_CHANCE) {
+                return { ...ingredient, isSpoilt: false };
+            }
+            const prefix = SPOILT_PREFIXES[Math.floor(Math.random() * SPOILT_PREFIXES.length)];
+            return {
+                ...ingredient,
+                isSpoilt: true,
+                label: `${prefix} ${ingredient.label}`,
+            };
+        };
 
         const getIngredientWithWeights = (board) => {
             const hasHeels = board.some(col => col.some(item => item.type === 'bottom_bun'));
             
-            // If no heels exist, crank up the heel weight to 60 to "cut slack"
+            // If no heels exist, increase heel odds so recovery remains likely
             const currentWeights = BASE_INGREDIENTS.map(ing => {
                 if (!hasHeels && ing.type === 'bottom_bun') {
-                    return { ...ing, weight: 60 };
+                    return { ...ing, weight: 38 };
                 }
                 return ing;
             });
@@ -60,17 +92,18 @@
             let r = Math.random() * totalWeight;
             
             for (const item of currentWeights) {
-                if (r < item.weight) return { id: crypto.randomUUID(), ...item };
+                if (r < item.weight) return { id: crypto.randomUUID(), ...maybeSpoilIngredient(item) };
                 r -= item.weight;
             }
-            return { id: crypto.randomUUID(), ...currentWeights[2] };
+            return { id: crypto.randomUUID(), ...maybeSpoilIngredient(currentWeights[2]) };
         };
 
         const getInitialBoard = () => 
-            Array.from({ length: 6 }, () => [{ id: crypto.randomUUID(), type: 'bottom_bun' }]);
+            Array.from({ length: COLS }, () => [{ id: crypto.randomUUID(), type: 'bottom_bun', label: 'Heel', isSpoilt: false }]);
 
-        const IngredientIcon = ({ type, className = "" }) => {
-            const baseClass = `w-full h-full drop-shadow-sm ${className}`;
+        const IngredientIcon = ({ type, className = "", isSpoilt = false }) => {
+            const spoilFx = isSpoilt ? 'brightness-[0.85] saturate-[0.75] hue-rotate-[55deg]' : '';
+            const baseClass = `w-full h-full drop-shadow-sm ${spoilFx} ${className}`;
             switch (type) {
                 case 'bottom_bun':
                     return (
@@ -153,6 +186,15 @@
             }
         };
 
+        const FireOverlayIcon = () => (
+            <svg viewBox="0 0 100 100" className="w-10 h-10 drop-shadow-md">
+                <path d="M50 92 Q18 78 20 52 Q22 35 38 24 Q43 38 52 44 Q58 28 72 16 Q82 30 82 48 Q82 76 50 92 Z" fill="#F97316" />
+                <path d="M50 84 Q28 74 30 55 Q31 46 40 38 Q44 49 51 53 Q56 43 66 34 Q72 44 72 56 Q72 74 50 84 Z" fill="#FACC15" opacity="0.9" />
+                <circle cx="62" cy="66" r="4" fill="#DC2626" opacity="0.55" />
+                <circle cx="40" cy="62" r="3" fill="#DC2626" opacity="0.45" />
+            </svg>
+        );
+
         const findBurger = (column) => {
             for (let i = column.length - 1; i >= 0; i--) {
                 if (column[i].type === 'top_bun') {
@@ -171,7 +213,8 @@
             let pts = 100;
             let messages = [];
             
-            const inner = burgerSlice.slice(1, -1).map(item => item.type);
+            const innerItems = burgerSlice.slice(1, -1);
+            const inner = innerItems.map(item => item.type);
             const totalSize = burgerSlice.length;
 
             pts += inner.length * 50;
@@ -209,7 +252,23 @@
                 messages.push(worstPenalty.msg);
             }
 
-            return { points: Math.max(10, pts), messages };
+            const hasPatty = numPatties > 0;
+            const hasCheese = numCheese > 0;
+            const hasEgg = (counts['egg'] || 0) > 0;
+            const hasBacon = (counts['bacon'] || 0) > 0;
+
+            if (hasCheese && !hasPatty) messages.push("Grilled Cheese!");
+            if (hasCheese && hasEgg && hasBacon && !hasPatty) messages.push("Breakfast Sammie!");
+
+            const spoiltCount = burgerSlice.filter(item => item.isSpoilt).length;
+            const goodCount = totalSize - spoiltCount;
+            const multiplier = Math.min(1, Math.max(0, goodCount / totalSize));
+            const finalPoints = Math.max(10, Math.round(pts * multiplier));
+            if (spoiltCount > 0) {
+                messages.push(`Spoilage x${multiplier.toFixed(2)}`);
+            }
+
+            return { points: finalPoints, messages };
         };
 
         function App() {
@@ -224,10 +283,46 @@
             const [animating, setAnimating] = useState(false);
             const [clearingState, setClearingState] = useState(null);
             const [popups, setPopups] = useState([]);
+            const [fireColumns, setFireColumns] = useState([]);
+            const [fireTimers, setFireTimers] = useState(spawnFireSettings);
 
             // Ref to track state for async closures
             const boardRef = useRef(board);
+            const fireColumnsRef = useRef(fireColumns);
+            const fireTimersRef = useRef(fireTimers);
             useEffect(() => { boardRef.current = board; }, [board]);
+            useEffect(() => { fireColumnsRef.current = fireColumns; }, [fireColumns]);
+            useEffect(() => { fireTimersRef.current = fireTimers; }, [fireTimers]);
+
+            const advanceFireTurn = useCallback(() => {
+                const prevCols = fireColumnsRef.current;
+                const prevTimers = fireTimersRef.current;
+                let nextCols = [...prevCols];
+                let untilSpread = prevTimers.untilSpread - 1;
+                let untilSpawn = prevTimers.untilSpawn - 1;
+
+                if (nextCols.length > 0 && untilSpread <= 0) {
+                    const source = nextCols[Math.floor(Math.random() * nextCols.length)];
+                    const options = [source - 1, source + 1].filter(idx => idx >= 0 && idx < COLS && !nextCols.includes(idx));
+                    if (options.length > 0) {
+                        nextCols.push(options[Math.floor(Math.random() * options.length)]);
+                        nextCols.sort((a, b) => a - b);
+                    }
+                    untilSpread = randomInt(FIRE_SPREAD_MIN, FIRE_SPREAD_MAX);
+                }
+
+                if (untilSpawn <= 0) {
+                    const spawnable = Array.from({ length: COLS }, (_, i) => i).filter(i => !nextCols.includes(i));
+                    if (spawnable.length > 0) {
+                        nextCols.push(spawnable[Math.floor(Math.random() * spawnable.length)]);
+                        nextCols.sort((a, b) => a - b);
+                    }
+                    untilSpawn = randomInt(FIRE_SPAWN_MIN, FIRE_SPAWN_MAX);
+                }
+
+                setFireColumns(nextCols);
+                setFireTimers({ untilSpawn, untilSpread });
+            }, []);
 
             useEffect(() => {
                 const isBoardEmpty = board.every(col => col.length === 0);
@@ -239,18 +334,20 @@
             useEffect(() => {
                 const allFull = board.every(col => col.length >= ROWS);
                 if (allFull && !animating) {
-                    const canMove = board.some(col => {
+                    const canMove = board.some((col, colIdx) => {
+                        const isBurning = fireColumns.includes(colIdx);
                         if (active.type === 'spatula') return true;
+                        if (isBurning) return false;
                         if (active.type === 'top_bun') return findBurger([...col, active]) !== null;
                         return false;
                     });
                     if (!canMove) setGameOver(true);
                 }
-            }, [board, active, animating]);
+            }, [board, active, animating, fireColumns]);
 
             useEffect(() => {
                 if (animating || gameOver) return;
-                for (let col = 0; col < 6; col++) {
+                for (let col = 0; col < COLS; col++) {
                     const match = findBurger(board[col]);
                     if (match) {
                         setAnimating(true);
@@ -281,8 +378,21 @@
                 if (gameOver || animating) return;
 
                 const col = board[colIndex];
+                const isBurning = fireColumns.includes(colIndex);
+
+                if (isBurning && active.type !== 'spatula') return;
                 
                 if (active.type === 'spatula') {
+                    if (isBurning) {
+                        setFireColumns(prev => prev.filter(idx => idx !== colIndex));
+                        advanceFireTurn();
+                        const nextActive = nextItems[0];
+                        const nextQueue = [nextItems[1], getIngredientWithWeights(boardRef.current)];
+                        setActive(nextActive);
+                        setNextItems(nextQueue);
+                        return;
+                    }
+
                     setAnimating(true);
                     // Clear the entire column
                     setClearingState({ col: colIndex, start: 0, end: col.length, isSpatula: true });
@@ -290,7 +400,7 @@
                         setBoard(prev => {
                             const newBoard = [...prev];
                             // Always reset with a heel
-                            newBoard[colIndex] = [{ id: crypto.randomUUID(), type: 'bottom_bun' }];
+                            newBoard[colIndex] = [{ id: crypto.randomUUID(), type: 'bottom_bun', label: 'Heel', isSpoilt: false }];
                             return newBoard;
                         });
                         setClearingState(null);
@@ -301,6 +411,7 @@
                     const nextQueue = [nextItems[1], getIngredientWithWeights(boardRef.current)];
                     setActive(nextActive);
                     setNextItems(nextQueue);
+                    advanceFireTurn();
                     return;
                 }
 
@@ -317,7 +428,8 @@
                 const nextQueue = [nextItems[1], getIngredientWithWeights(newBoardState)];
                 setActive(nextActive);
                 setNextItems(nextQueue);
-            }, [gameOver, animating, board, active, nextItems]);
+                advanceFireTurn();
+            }, [gameOver, animating, board, active, nextItems, fireColumns, advanceFireTurn]);
 
             const resetGame = () => {
                 const initialBoard = getInitialBoard();
@@ -328,6 +440,8 @@
                 setGameOver(false);
                 setClearingState(null);
                 setPopups([]);
+                setFireColumns([]);
+                setFireTimers(spawnFireSettings());
             };
 
             return (
@@ -346,13 +460,13 @@
                                 <div className="flex flex-col items-center">
                                     <div className="w-14 h-14 flex items-center justify-center bg-orange-100 rounded-lg relative mb-1">
                                         <div className="w-11 h-11 animate-bounce">
-                                            <IngredientIcon type={active.type} />
+                                            <IngredientIcon type={active.type} isSpoilt={active.isSpoilt} />
                                         </div>
                                     </div>
-                                    <span className="text-[10px] font-black uppercase text-orange-800 tracking-tighter">{active.label}</span>
+                                    <span className="text-[10px] font-black uppercase text-orange-800 tracking-tighter min-w-[70px] text-center">{active.label}</span>
                                 </div>
                                 <div className="w-10 h-10 flex items-center justify-center bg-orange-100/50 rounded-lg opacity-40 mt-2">
-                                    <IngredientIcon type={nextItems[0].type} />
+                                    <IngredientIcon type={nextItems[0].type} isSpoilt={nextItems[0].isSpoilt} />
                                 </div>
                             </div>
                         </div>
@@ -363,15 +477,18 @@
                             <div className="flex gap-1">
                                 {board.map((col, colIndex) => {
                                     const colIsFull = col.length >= ROWS;
+                                    const isBurning = fireColumns.includes(colIndex);
                                     const canDropCrown = colIsFull && active.type === 'top_bun' && findBurger([...col, active]);
                                     const canDropSpatula = active.type === 'spatula';
                                     const isDisabled = colIsFull && !canDropCrown && !canDropSpatula;
+                                    const blockedByFire = isBurning && active.type !== 'spatula';
                                     
                                     return (
                                         <div 
                                             key={colIndex}
-                                            className={`relative w-14 h-[500px] flex flex-col-reverse rounded-xl transition-colors
-                                                ${isDisabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:bg-orange-50/20'}`}
+                                            className={`relative w-14 h-[400px] flex flex-col-reverse rounded-xl transition-colors
+                                                ${isDisabled || blockedByFire ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:bg-orange-50/20'}
+                                                ${isBurning ? 'bg-orange-400/20' : ''}`}
                                             onClick={() => dropItem(colIndex)}
                                         >
                                             {col.map((item, rowIndex) => {
@@ -381,11 +498,16 @@
                                                     <div key={item.id} className={`w-14 h-[50px] flex items-center justify-center transition-all duration-300 
                                                         ${isClearing ? (spatulaAnim ? 'scale-0 opacity-0 -translate-y-10' : 'animate-pulse scale-110 brightness-110 drop-shadow-lg z-10') : 'drop-shadow-sm'}`}>
                                                         <div className="w-14 h-14 absolute">
-                                                            <IngredientIcon type={item.type} />
+                                                            <IngredientIcon type={item.type} isSpoilt={item.isSpoilt} />
                                                         </div>
                                                     </div>
                                                 );
                                             })}
+                                            {isBurning && (
+                                                <div className="absolute top-1 left-1/2 -translate-x-1/2 pointer-events-none">
+                                                    <FireOverlayIcon />
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
