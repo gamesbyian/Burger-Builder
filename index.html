@@ -16,6 +16,11 @@
             100% { transform: translateY(-80px) scale(0.9); opacity: 0; }
         }
         .animate-fade-up { animation: fadeUp 2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes flicker {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1) translateY(-5px); }
+        }
+        .animate-flicker { animation: flicker 0.5s infinite alternate; }
         body { background-color: #fffaf0; }
         .trough-bg { background-color: #f3e8d6; }
     </style>
@@ -187,11 +192,10 @@
         };
 
         const FireOverlayIcon = () => (
-            <svg viewBox="0 0 100 100" className="w-10 h-10 drop-shadow-md">
-                <path d="M50 92 Q18 78 20 52 Q22 35 38 24 Q43 38 52 44 Q58 28 72 16 Q82 30 82 48 Q82 76 50 92 Z" fill="#F97316" />
-                <path d="M50 84 Q28 74 30 55 Q31 46 40 38 Q44 49 51 53 Q56 43 66 34 Q72 44 72 56 Q72 74 50 84 Z" fill="#FACC15" opacity="0.9" />
-                <circle cx="62" cy="66" r="4" fill="#DC2626" opacity="0.55" />
-                <circle cx="40" cy="62" r="3" fill="#DC2626" opacity="0.45" />
+            <svg viewBox="0 0 100 100" className="w-10 h-10 animate-flicker">
+                <path d="M50 90 Q30 90 20 70 Q10 50 30 30 Q50 0 70 30 Q90 50 80 70 Q70 90 50 90" fill="#f97316" />
+                <path d="M50 85 Q35 85 25 70 Q20 55 35 45 Q50 20 65 45 Q80 55 75 70 Q65 85 50 85" fill="#facc15" />
+                <path d="M50 80 Q40 80 35 70 Q30 60 40 55 Q50 40 60 55 Q70 60 65 70 Q60 80 50 80" fill="#ffffff" />
             </svg>
         );
 
