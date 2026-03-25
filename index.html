@@ -52,9 +52,9 @@
         const COLS = 6;
         const FIRE_SPAWN_MIN = 20;
         const FIRE_SPAWN_MAX = 30;
-        const FIRE_SPREAD_MIN = 3;
-        const FIRE_SPREAD_MAX = 4;
-        const SPOILT_CHANCE = 0.04;
+        const FIRE_SPREAD_MIN = 6;
+        const FIRE_SPREAD_MAX = 8;
+        const SPOILT_CHANCE = 0.12;
         const SPOILT_PREFIXES = ['Rotten', 'Slimy', 'Moldy'];
         const SPOILABLE_TYPES = new Set([
             'patty', 'cheese', 'lettuce', 'tomato', 'bacon', 'onion', 'pickle', 'egg', 'ketchup', 'mustard', 'mayo'
@@ -469,8 +469,13 @@
                                     </div>
                                     <span className="text-[10px] font-black uppercase text-orange-800 tracking-tighter min-w-[70px] text-center">{active.label}</span>
                                 </div>
-                                <div className="w-10 h-10 flex items-center justify-center bg-orange-100/50 rounded-lg opacity-40 mt-2">
-                                    <IngredientIcon type={nextItems[0].type} isSpoilt={nextItems[0].isSpoilt} />
+                                <div className="flex flex-col items-center">
+                                    <div className="w-10 h-10 flex items-center justify-center bg-orange-100/50 rounded-lg opacity-40 mt-2">
+                                        <IngredientIcon type={nextItems[0].type} isSpoilt={nextItems[0].isSpoilt} />
+                                    </div>
+                                    <span className="text-[9px] font-black uppercase text-orange-700 tracking-tight min-w-[56px] text-center mt-1">
+                                        {nextItems[0].label}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -508,7 +513,7 @@
                                                 );
                                             })}
                                             {isBurning && (
-                                                <div className="absolute top-1 left-1/2 -translate-x-1/2 pointer-events-none">
+                                                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 pointer-events-none">
                                                     <FireOverlayIcon />
                                                 </div>
                                             )}
