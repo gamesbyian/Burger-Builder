@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Burger Builder</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeUp {
+            0% { transform: translateY(0) scale(0.8); opacity: 0; }
+            20% { transform: translateY(-20px) scale(1.1); opacity: 1; }
+            80% { transform: translateY(-60px) scale(1); opacity: 1; }
+            100% { transform: translateY(-80px) scale(0.9); opacity: 0; }
+        }
+        .animate-fade-up { animation: fadeUp 2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        body { background-color: #fffaf0; }
+        .trough-bg { background-color: #f3e8d6; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
+
+        const BASE_INGREDIENTS = [
+            { type: 'top_bun', label: 'Crown', weight: 40 },
+            { type: 'bottom_bun', label: 'Heel', weight: 12 },
+            { type: 'patty', label: 'Patty', weight: 18 },
+            { type: 'cheese', label: 'Cheese', weight: 14 },
+            { type: 'lettuce', label: 'Lettuce', weight: 10 },
+            { type: 'tomato', label: 'Tomato', weight: 10 },
+            { type: 'bacon', label: 'Bacon', weight: 7 },
+            { type: 'onion', label: 'Onion', weight: 6 },
+            { type: 'pickle', label: 'Pickle', weight: 6 },
+            { type: 'egg', label: 'Fried Egg', weight: 5 },
+            { type: 'ketchup', label: 'Ketchup', weight: 4 },
+            { type: 'mustard', label: 'Mustard', weight: 4 },
+            { type: 'mayo', label: 'Mayo', weight: 4 },
+            { type: 'spatula', label: 'Spatula', weight: 5 },
+        ];
+
+        const ROWS = 10;
+
+        const getIngredientWithWeights = (board) => {
+            const hasHeels = board.some(col => col.some(item => item.type === 'bottom_bun'));
+            
+            // If no heels exist, crank up the heel weight to 60 to "cut slack"
+            const currentWeights = BASE_INGREDIENTS.map(ing => {
+                if (!hasHeels && ing.type === 'bottom_bun') {
+                    return { ...ing, weight: 60 };
+                }
+                return ing;
+            });
+
+            const totalWeight = currentWeights.reduce((acc, item) => acc + item.weight, 0);
+            let r = Math.random() * totalWeight;
+            
+            for (const item of currentWeights) {
+                if (r < item.weight) return { id: crypto.randomUUID(), ...item };
+                r -= item.weight;
+            }
+            return { id: crypto.randomUUID(), ...currentWeights[2] };
+        };
+
+        const getInitialBoard = () => 
+            Array.from({ length: 6 }, () => [{ id: crypto.randomUUID(), type: 'bottom_bun' }]);
+
+        const IngredientIcon = ({ type, className = "" }) => {
+            const baseClass = `w-full h-full drop-shadow-sm ${className}`;
+            switch (type) {
+                case 'bottom_bun':
+                    return (
+                        <svg viewBox="0 0 100 100" className={baseClass}>
+                            <path d="M 10 20 L 90 20 L 90 65 Q 90 75 80 75 L 20 75 Q 10 75 10 65 Z" fill="#EDBA69" />
+                            <path d="M 10 20 L 90 20 L 90 30 Q 50 35 10 30 Z" fill="#FDE08B" opacity="0.4" />
+                        </svg>
+                    );
+                case 'top_bun':
+                    return <svg viewBox="0 0 100 100" className={baseClass}><path d="M 10 80 L 90 80 Q 90 20 50 20 Q 10 20 10 80 Z" fill="#EDBA69" /><ellipse cx="30" cy="45" rx="2" ry="4" fill="#FFF" transform="rotate(-30 30 45)" /><ellipse cx="50" cy="35" rx="2" ry="4" fill="#FFF" transform="rotate(10 50 35)" /><ellipse cx="70" cy="50" rx="2" ry="4" fill="#FFF" transform="rotate(40 70 50)" /><ellipse cx="40" cy="55" rx="2" ry="4" fill="#FFF" transform="rotate(-15 40 55)" /><ellipse cx="60" cy="60" rx="2" ry="4" fill="#FFF" transform="rotate(25 60 60)" /></svg>;
+                case 'patty':
+                    return <svg viewBox="0 0 100 100" className={baseClass}><rect x="10" y="30" width="80" height="40" rx="15" fill="#5C3A21" /><line x1="20" y1="45" x2="80" y2="45" stroke="#3E2514" strokeWidth="3" strokeDasharray="6,4" strokeLinecap="round" /></svg>;
+                case 'cheese':
+                    return <svg viewBox="0 0 100 100" className={baseClass}><path d="M 5 40 L 95 40 L 85 60 L 70 50 L 55 70 L 40 50 L 25 65 L 10 50 Z" fill="#FBBF24" /></svg>;
+                case 'lettuce':
+                    return <svg viewBox="0 0 100 100" className={baseClass}><path d="M 5 50 Q 15 30 25 50 T 45 50 T 65 50 T 85 50 Q 95 30 95 50 Q 85 70 75 50 T 55 50 T 35 50 T 15 50 Q 5 70 5 50 Z" fill="#84CC16" /></svg>;
+                case 'tomato':
+                    return (
+                        <svg viewBox="0 0 100 100" className={baseClass}>
+                            <ellipse cx="50" cy="50" rx="42" ry="18" fill="#EF4444" stroke="#B91C1C" strokeWidth="2" />
+                            <ellipse cx="50" cy="50" rx="36" ry="14" fill="#DC2626" opacity="0.6" />
+                            <circle cx="30" cy="50" r="3" fill="#FDE68A" />
+                            <circle cx="70" cy="50" r="3" fill="#FDE68A" />
+                            <circle cx="50" cy="42" r="2.5" fill="#FDE68A" />
+                            <circle cx="50" cy="58" r="2.5" fill="#FDE68A" />
+                            <ellipse cx="50" cy="50" rx="36" ry="14" fill="none" stroke="#B91C1C" strokeWidth="1" opacity="0.3" />
+                            <line x1="14" y1="50" x2="86" y2="50" stroke="#B91C1C" strokeWidth="1" opacity="0.3" />
+                            <line x1="50" y1="32" x2="50" y2="68" stroke="#B91C1C" strokeWidth="1" opacity="0.3" />
+                        </svg>
+                    );
+                case 'bacon':
+                    return <svg viewBox="0 0 100 100" className={baseClass}><path d="M 10 40 Q 25 25 40 40 T 70 40 T 95 40" stroke="#991B1B" strokeWidth="8" fill="none" strokeLinecap="round" /><path d="M 15 45 Q 25 35 40 45 T 70 45 T 90 45" stroke="#FCA5A5" strokeWidth="3" fill="none" strokeLinecap="round" /></svg>;
+                case 'egg':
+                    return (
+                        <svg viewBox="0 0 100 100" className={baseClass}>
+                            <ellipse cx="50" cy="50" rx="42" ry="24" fill="#FFFFFF" />
+                            <ellipse cx="48" cy="48" rx="38" ry="20" fill="#F9FAFB" opacity="0.5" />
+                            <ellipse cx="52" cy="48" rx="16" ry="10" fill="#FBBF24" />
+                            <ellipse cx="50" cy="46" rx="6" ry="3" fill="#FFF" opacity="0.4" />
+                        </svg>
+                    );
+                case 'pickle':
+                    return (
+                        <svg viewBox="0 0 100 100" className={baseClass}>
+                            <ellipse cx="32" cy="50" rx="18" ry="10" fill="#4ADE80" stroke="#166534" strokeWidth="3" />
+                            <ellipse cx="68" cy="50" rx="18" ry="10" fill="#4ADE80" stroke="#166534" strokeWidth="3" />
+                            <circle cx="28" cy="48" r="1.5" fill="#166534" opacity="0.3" />
+                            <circle cx="36" cy="52" r="1.5" fill="#166534" opacity="0.3" />
+                            <circle cx="64" cy="48" r="1.5" fill="#166534" opacity="0.3" />
+                            <circle cx="72" cy="52" r="1.5" fill="#166534" opacity="0.3" />
+                        </svg>
+                    );
+                case 'onion':
+                    return (
+                        <svg viewBox="0 0 100 100" className={baseClass}>
+                            <ellipse cx="50" cy="50" rx="42" ry="16" fill="none" stroke="#D946EF" strokeWidth="5" />
+                            <ellipse cx="50" cy="50" rx="32" ry="12" fill="none" stroke="#D946EF" strokeWidth="3" opacity="0.8" />
+                            <ellipse cx="50" cy="50" rx="22" ry="8" fill="none" stroke="#D946EF" strokeWidth="2" opacity="0.6" />
+                            <ellipse cx="50" cy="50" rx="12" ry="4" fill="none" stroke="#D946EF" strokeWidth="1" opacity="0.4" />
+                        </svg>
+                    );
+                case 'ketchup':
+                    return <svg viewBox="0 0 100 100" className={baseClass}><path d="M 15 50 Q 30 20 45 50 T 85 50" stroke="#EF4444" strokeWidth="12" fill="none" strokeLinecap="round" /></svg>;
+                case 'mustard':
+                    return <svg viewBox="0 0 100 100" className={baseClass}><path d="M 15 50 Q 30 80 45 50 T 85 50" stroke="#EAB308" strokeWidth="12" fill="none" strokeLinecap="round" /></svg>;
+                case 'mayo':
+                    return <svg viewBox="0 0 100 100" className={baseClass}><path d="M 15 50 Q 30 20 45 50 T 85 50" stroke="#F3F4F6" strokeWidth="12" fill="none" strokeLinecap="round" /></svg>;
+                case 'spatula':
+                    return (
+                        <svg viewBox="0 0 100 100" className={baseClass}>
+                            <rect x="42" y="35" width="16" height="55" rx="4" fill="#4B5563" />
+                            <rect x="20" y="5" width="60" height="40" rx="4" fill="#94A3B8" />
+                            <line x1="35" y1="12" x2="35" y2="32" stroke="#4B5563" strokeWidth="4" strokeLinecap="round" />
+                            <line x1="50" y1="12" x2="50" y2="32" stroke="#4B5563" strokeWidth="4" strokeLinecap="round" />
+                            <line x1="65" y1="12" x2="65" y2="32" stroke="#4B5563" strokeWidth="4" strokeLinecap="round" />
+                        </svg>
+                    );
+                default:
+                    return null;
+            }
+        };
+
+        const findBurger = (column) => {
+            for (let i = column.length - 1; i >= 0; i--) {
+                if (column[i].type === 'top_bun') {
+                    for (let j = i - 1; j >= 0; j--) {
+                        if (column[j].type === 'top_bun') break;
+                        if (column[j].type === 'bottom_bun') {
+                            return { startIndex: j, endIndex: i };
+                        }
+                    }
+                }
+            }
+            return null;
+        };
+
+        const calculateScore = (burgerSlice) => {
+            let pts = 100;
+            let messages = [];
+            
+            const inner = burgerSlice.slice(1, -1).map(item => item.type);
+            const totalSize = burgerSlice.length;
+
+            pts += inner.length * 50;
+
+            const counts = inner.reduce((acc, type) => { acc[type] = (acc[type] || 0) + 1; return acc; }, {});
+            const numPatties = counts['patty'] || 0;
+            const numCheese = counts['cheese'] || 0;
+            
+            if (totalSize === ROWS) {
+                pts += 500;
+                messages.push("Skyscraper Bonus! (+500)");
+            }
+
+            if (numPatties > 0 && numPatties === numCheese) {
+                pts += 250;
+                messages.push("Perfect Ratio! (+250)");
+            }
+
+            const hasDuplicates = inner.some(type => counts[type] > 1);
+            if (inner.length >= 4 && !hasDuplicates) {
+                pts += 300;
+                messages.push("Variety Pack! (+300)");
+            }
+
+            const possiblePenalties = [];
+            if (inner.length === 0) {
+                possiblePenalties.push({ score: -150, msg: "What's The Point? (-150)", weight: 10 });
+            } else if (numPatties === 0) {
+                possiblePenalties.push({ score: -100, msg: "Where's the Beef?! (-100)", weight: 5 });
+            }
+
+            if (possiblePenalties.length > 0) {
+                const worstPenalty = possiblePenalties.sort((a, b) => b.weight - a.weight)[0];
+                pts += worstPenalty.score;
+                messages.push(worstPenalty.msg);
+            }
+
+            return { points: Math.max(10, pts), messages };
+        };
+
+        function App() {
+            const [board, setBoard] = useState(getInitialBoard);
+            const [active, setActive] = useState(() => getIngredientWithWeights(getInitialBoard()));
+            const [nextItems, setNextItems] = useState(() => [
+                getIngredientWithWeights(getInitialBoard()), 
+                getIngredientWithWeights(getInitialBoard())
+            ]);
+            const [score, setScore] = useState(0);
+            const [gameOver, setGameOver] = useState(false);
+            const [animating, setAnimating] = useState(false);
+            const [clearingState, setClearingState] = useState(null);
+            const [popups, setPopups] = useState([]);
+
+            // Ref to track state for async closures
+            const boardRef = useRef(board);
+            useEffect(() => { boardRef.current = board; }, [board]);
+
+            useEffect(() => {
+                const isBoardEmpty = board.every(col => col.length === 0);
+                if (isBoardEmpty && !animating && !gameOver) {
+                    setBoard(getInitialBoard());
+                }
+            }, [board, animating, gameOver]);
+
+            useEffect(() => {
+                const allFull = board.every(col => col.length >= ROWS);
+                if (allFull && !animating) {
+                    const canMove = board.some(col => {
+                        if (active.type === 'spatula') return true;
+                        if (active.type === 'top_bun') return findBurger([...col, active]) !== null;
+                        return false;
+                    });
+                    if (!canMove) setGameOver(true);
+                }
+            }, [board, active, animating]);
+
+            useEffect(() => {
+                if (animating || gameOver) return;
+                for (let col = 0; col < 6; col++) {
+                    const match = findBurger(board[col]);
+                    if (match) {
+                        setAnimating(true);
+                        setClearingState({ col, start: match.startIndex, end: match.endIndex });
+                        const slice = board[col].slice(match.startIndex, match.endIndex + 1);
+                        const { points, messages } = calculateScore(slice);
+                        setScore(s => s + points);
+                        const popupId = crypto.randomUUID();
+                        setPopups(p => [...p, { id: popupId, col, points, messages }]);
+                        setTimeout(() => setPopups(p => p.filter(popup => popup.id !== popupId)), 2000);
+                        setTimeout(() => {
+                            setBoard(prev => {
+                                const newBoard = [...prev];
+                                const newCol = [...newBoard[col]];
+                                newCol.splice(match.startIndex, match.endIndex - match.startIndex + 1);
+                                newBoard[col] = newCol;
+                                return newBoard;
+                            });
+                            setClearingState(null);
+                            setAnimating(false);
+                        }, 800);
+                        return;
+                    }
+                }
+            }, [board, animating, gameOver]);
+
+            const dropItem = useCallback((colIndex) => {
+                if (gameOver || animating) return;
+
+                const col = board[colIndex];
+                
+                if (active.type === 'spatula') {
+                    setAnimating(true);
+                    // Clear the entire column
+                    setClearingState({ col: colIndex, start: 0, end: col.length, isSpatula: true });
+                    setTimeout(() => {
+                        setBoard(prev => {
+                            const newBoard = [...prev];
+                            // Always reset with a heel
+                            newBoard[colIndex] = [{ id: crypto.randomUUID(), type: 'bottom_bun' }];
+                            return newBoard;
+                        });
+                        setClearingState(null);
+                        setAnimating(false);
+                    }, 500);
+                    
+                    const nextActive = nextItems[0];
+                    const nextQueue = [nextItems[1], getIngredientWithWeights(boardRef.current)];
+                    setActive(nextActive);
+                    setNextItems(nextQueue);
+                    return;
+                }
+
+                const isFull = col.length >= ROWS;
+                if (isFull) {
+                    if (active.type !== 'top_bun') return;
+                    if (!findBurger([...col, active])) return;
+                }
+
+                const newBoardState = board.map((c, i) => i === colIndex ? [...c, active] : c);
+                setBoard(newBoardState);
+
+                const nextActive = nextItems[0];
+                const nextQueue = [nextItems[1], getIngredientWithWeights(newBoardState)];
+                setActive(nextActive);
+                setNextItems(nextQueue);
+            }, [gameOver, animating, board, active, nextItems]);
+
+            const resetGame = () => {
+                const initialBoard = getInitialBoard();
+                setBoard(initialBoard);
+                setActive(getIngredientWithWeights(initialBoard));
+                setNextItems([getIngredientWithWeights(initialBoard), getIngredientWithWeights(initialBoard)]);
+                setScore(0);
+                setGameOver(false);
+                setClearingState(null);
+                setPopups([]);
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-4">
+                    <div className="w-full max-w-md flex justify-between items-end mb-6">
+                        <div>
+                            <h1 className="text-3xl font-black text-orange-900 leading-none mb-1 uppercase tracking-tight">Burger Builder</h1>
+                            <p className="text-orange-700 font-bold text-xl bg-orange-200 inline-block px-3 py-1 rounded-full shadow-sm">
+                                {score.toLocaleString()}
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col items-end">
+                            <span className="text-xs font-bold text-orange-600 mb-1 uppercase tracking-widest">Next Up</span>
+                            <div className="flex gap-2 bg-white/60 p-2 rounded-xl border-2 border-orange-200 shadow-sm backdrop-blur-sm">
+                                <div className="flex flex-col items-center">
+                                    <div className="w-14 h-14 flex items-center justify-center bg-orange-100 rounded-lg relative mb-1">
+                                        <div className="w-11 h-11 animate-bounce">
+                                            <IngredientIcon type={active.type} />
+                                        </div>
+                                    </div>
+                                    <span className="text-[10px] font-black uppercase text-orange-800 tracking-tighter">{active.label}</span>
+                                </div>
+                                <div className="w-10 h-10 flex items-center justify-center bg-orange-100/50 rounded-lg opacity-40 mt-2">
+                                    <IngredientIcon type={nextItems[0].type} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="relative">
+                        <div className="trough-bg rounded-2xl p-3 border-4 border-orange-300 shadow-xl relative">
+                            <div className="flex gap-1">
+                                {board.map((col, colIndex) => {
+                                    const colIsFull = col.length >= ROWS;
+                                    const canDropCrown = colIsFull && active.type === 'top_bun' && findBurger([...col, active]);
+                                    const canDropSpatula = active.type === 'spatula';
+                                    const isDisabled = colIsFull && !canDropCrown && !canDropSpatula;
+                                    
+                                    return (
+                                        <div 
+                                            key={colIndex}
+                                            className={`relative w-14 h-[500px] flex flex-col-reverse rounded-xl transition-colors
+                                                ${isDisabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:bg-orange-50/20'}`}
+                                            onClick={() => dropItem(colIndex)}
+                                        >
+                                            {col.map((item, rowIndex) => {
+                                                const isClearing = clearingState?.col === colIndex && rowIndex >= clearingState.start && rowIndex <= clearingState.end;
+                                                const spatulaAnim = isClearing && clearingState.isSpatula;
+                                                return (
+                                                    <div key={item.id} className={`w-14 h-[50px] flex items-center justify-center transition-all duration-300 
+                                                        ${isClearing ? (spatulaAnim ? 'scale-0 opacity-0 -translate-y-10' : 'animate-pulse scale-110 brightness-110 drop-shadow-lg z-10') : 'drop-shadow-sm'}`}>
+                                                        <div className="w-14 h-14 absolute">
+                                                            <IngredientIcon type={item.type} />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {popups.map(popup => (
+                                <div key={popup.id} className="absolute pointer-events-none flex flex-col items-center justify-end z-20 animate-fade-up"
+                                    style={{ left: `${(popup.col * 60) + 12}px`, bottom: '50%', width: '100px', marginLeft: '-22px' }}>
+                                    <div className="text-2xl font-black text-green-600 drop-shadow-sm">+{popup.points}</div>
+                                    {popup.messages.map((msg, i) => (
+                                        <div key={i} className={`text-xs font-bold text-center mt-1 px-1 rounded shadow-sm ${msg.includes('-') ? 'bg-red-500 text-white' : 'bg-yellow-400 text-yellow-900'}`}>
+                                            {msg}
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+
+                            {gameOver && (
+                                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-30 rounded-xl px-4 text-center">
+                                    <h2 className="text-4xl font-black text-white mb-2 transform -rotate-2">KITCHEN CLOSED</h2>
+                                    <p className="text-lg text-orange-200 font-bold mb-6">The tray is full. No more burgers today!</p>
+                                    <div className="bg-white/10 p-4 rounded-2xl mb-6">
+                                        <span className="text-white text-sm block uppercase tracking-widest opacity-60">Final Tally</span>
+                                        <span className="text-4xl text-orange-400 font-black">{score.toLocaleString()}</span>
+                                    </div>
+                                    <button onClick={resetGame} className="bg-orange-500 hover:bg-orange-400 text-white font-black py-3 px-8 rounded-full shadow-[0_4px_0_rgb(194,65,12)] active:translate-y-1 active:shadow-none transition-all text-xl">
+                                        RE-OPEN SHOP
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="mt-8 text-center text-orange-800/60 font-medium max-w-sm text-sm">
+                        <p><strong>Spatulas</strong> clear a whole column and leave a heel bun.</p>
+                        <p>If the whole tray clears, you get a fresh row of heels.</p>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
