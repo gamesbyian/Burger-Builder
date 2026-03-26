@@ -53,9 +53,10 @@
 
         const ROWS = 8;
         const COLS = 6;
-        const FIRE_SPAWN_MIN = 20;
-        const FIRE_SPAWN_MAX = 30;
-        const FIRE_SPREAD_INTERVAL = 15;
+        const FIRE_SPAWN_MIN = 35;
+        const FIRE_SPAWN_MAX = 50;
+        const FIRE_SPREAD_INTERVAL = 30;
+        const FIRE_START_AFTER_CLEARS = 7;
         const FIRE_WARNING_WINDOW = 5;
         const SPATULA_MAX_CHARGES = 2;
         const SPATULA_PASSIVE_CHARGE_PER_SECOND = 1 / 30;
@@ -326,16 +327,21 @@
             const [fireCycle, setFireCycle] = useState(0);
             const [spatulaCharge, setSpatulaCharge] = useState(0);
             const [spatulaPrimed, setSpatulaPrimed] = useState(false);
+            const [burgersCleared, setBurgersCleared] = useState(0);
 
             // Ref to track state for async closures
             const boardRef = useRef(board);
             const fireColumnsRef = useRef(fireColumns);
             const fireTimersRef = useRef(fireTimers);
+            const burgersClearedRef = useRef(burgersCleared);
             useEffect(() => { boardRef.current = board; }, [board]);
             useEffect(() => { fireColumnsRef.current = fireColumns; }, [fireColumns]);
             useEffect(() => { fireTimersRef.current = fireTimers; }, [fireTimers]);
+            useEffect(() => { burgersClearedRef.current = burgersCleared; }, [burgersCleared]);
 
             const advanceFireTurn = useCallback(() => {
+                if (burgersClearedRef.current < FIRE_START_AFTER_CLEARS) return;
+
                 const prevCols = fireColumnsRef.current;
                 const prevTimers = fireTimersRef.current;
                 let nextCols = [...prevCols];
@@ -417,6 +423,7 @@
                         setClearingState({ col, start: match.startIndex, end: match.endIndex });
                         const slice = board[col].slice(match.startIndex, match.endIndex + 1);
                         const { points, messages } = calculateScore(slice);
+                        setBurgersCleared(prev => prev + 1);
                         setScore(s => s + points);
                         setSpatulaCharge(prev => clampSpatulaCharge(prev + calculateSpatulaChargeGain(points)));
                         const popupId = crypto.randomUUID();
@@ -502,6 +509,7 @@
                 setFireCycle(0);
                 setSpatulaCharge(0);
                 setSpatulaPrimed(false);
+                setBurgersCleared(0);
             };
 
             const spatulaChargesAvailable = Math.floor(spatulaCharge);
