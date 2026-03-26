@@ -474,12 +474,12 @@
                     <div className="w-full max-w-md flex justify-between items-end mb-6">
                         <div>
                             <h1 className="text-3xl font-black text-orange-900 leading-none mb-1 uppercase tracking-tight">Burger Builder</h1>
-                            <div className="flex items-center gap-3">
-                                <p className="text-orange-700 font-bold text-xl bg-orange-200 inline-block px-3 py-1 rounded-full shadow-sm">
+                            <div className="flex items-center gap-4">
+                                <p className="text-orange-700 font-bold text-xl bg-orange-200 inline-block px-3 py-1 rounded-full shadow-sm whitespace-nowrap">
                                     {score.toLocaleString()}
                                 </p>
                                 <button
-                                    className={`relative overflow-hidden px-3 py-2 rounded-xl border-2 font-black text-xs uppercase tracking-wide transition-all
+                                    className={`relative overflow-hidden px-2.5 py-1.5 rounded-xl border-2 font-black text-xs uppercase tracking-wide transition-all shrink-0
                                         ${spatulaPrimed
                                             ? 'bg-sky-600 border-sky-700 text-white shadow-lg scale-105'
                                             : spatulaReady
@@ -495,7 +495,6 @@
                                     />
                                     <div className="relative flex items-center gap-2">
                                         <div className="w-5 h-5"><IngredientIcon type="spatula" /></div>
-                                        <span>{spatulaPrimed ? 'Primed' : 'Spatula'}</span>
                                         <span className="bg-white/80 text-sky-900 rounded-full min-w-5 h-5 px-1 flex items-center justify-center">
                                             {spatulaChargesAvailable}
                                         </span>
