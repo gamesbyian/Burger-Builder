@@ -387,17 +387,11 @@
                 if (isBurning && active.type !== 'spatula') return;
                 
                 if (active.type === 'spatula') {
+                    setAnimating(true);
+                    // Spatulas always extinguish fire in their target column
                     if (isBurning) {
                         setFireColumns(prev => prev.filter(idx => idx !== colIndex));
-                        advanceFireTurn();
-                        const nextActive = nextItems[0];
-                        const nextQueue = [nextItems[1], getIngredientWithWeights(boardRef.current)];
-                        setActive(nextActive);
-                        setNextItems(nextQueue);
-                        return;
                     }
-
-                    setAnimating(true);
                     // Clear the entire column
                     setClearingState({ col: colIndex, start: 0, end: col.length, isSpatula: true });
                     setTimeout(() => {
