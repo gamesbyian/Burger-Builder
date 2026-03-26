@@ -60,6 +60,8 @@
         const FIRE_WARNING_WINDOW = 5;
         const SPATULA_MAX_CHARGES = 2;
         const SPATULA_PASSIVE_CHARGE_PER_SECOND = 1 / 30;
+        const WASTE_PENALTY_MULTIPLIER = 10;
+        const WASTE_PENALTY_EXPONENT = 2;
         const SPOILT_CHANCE = 0.12;
         const SPOILT_PREFIXES = ['Rotten', 'Slimy', 'Moldy'];
         const SPOILABLE_TYPES = new Set([
@@ -310,6 +312,10 @@
             return clearContribution + highScoreBonus;
         };
 
+        const calculateWastePenalty = (clearedCount) => (
+            Math.pow(clearedCount, WASTE_PENALTY_EXPONENT) * WASTE_PENALTY_MULTIPLIER
+        );
+
         function App() {
             const [board, setBoard] = useState(getInitialBoard);
             const [active, setActive] = useState(() => getIngredientWithWeights(getInitialBoard()));
@@ -427,7 +433,7 @@
                         setScore(s => s + points);
                         setSpatulaCharge(prev => clampSpatulaCharge(prev + calculateSpatulaChargeGain(points)));
                         const popupId = crypto.randomUUID();
-                        setPopups(p => [...p, { id: popupId, col, points, messages }]);
+                        setPopups(p => [...p, { id: popupId, col, points, messages, type: 'score' }]);
                         setTimeout(() => setPopups(p => p.filter(popup => popup.id !== popupId)), 2000);
                         setTimeout(() => {
                             setBoard(prev => {
@@ -458,9 +464,15 @@
                         setSpatulaPrimed(false);
                         return;
                     }
+                    const clearedCount = col.length;
+                    const penalty = calculateWastePenalty(clearedCount);
                     setAnimating(true);
                     setSpatulaCharge(prev => clampSpatulaCharge(prev - 1));
                     setSpatulaPrimed(false);
+                    setScore(s => s - penalty);
+                    const popupId = crypto.randomUUID();
+                    setPopups(p => [...p, { id: popupId, col: colIndex, points: penalty, messages: [`Waste -${penalty}`], type: 'waste' }]);
+                    setTimeout(() => setPopups(p => p.filter(popup => popup.id !== popupId)), 2000);
                     // Spatulas always extinguish fire in their target column
                     if (isBurning) {
                         setFireColumns(prev => prev.filter(idx => idx !== colIndex));
@@ -617,12 +629,23 @@
                             {popups.map(popup => (
                                 <div key={popup.id} className="absolute pointer-events-none flex flex-col items-center justify-end z-20 animate-fade-up"
                                     style={{ left: `${(popup.col * 60) + 12}px`, bottom: '50%', width: '100px', marginLeft: '-22px' }}>
-                                    <div className="text-2xl font-black text-green-600 drop-shadow-sm">+{popup.points}</div>
-                                    {popup.messages.map((msg, i) => (
-                                        <div key={i} className={`text-xs font-bold text-center mt-1 px-1 rounded shadow-sm ${msg.includes('-') ? 'bg-red-500 text-white' : 'bg-yellow-400 text-yellow-900'}`}>
-                                            {msg}
-                                        </div>
-                                    ))}
+                                    {popup.type === 'waste' ? (
+                                        <>
+                                            <div className="text-2xl font-black text-amber-800 drop-shadow-sm">-{popup.points}</div>
+                                            <div className="text-xs font-bold text-center mt-1 px-2 py-0.5 rounded shadow-sm bg-stone-700 text-orange-100">
+                                                {popup.messages[0]}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="text-2xl font-black text-green-600 drop-shadow-sm">+{popup.points}</div>
+                                            {popup.messages.map((msg, i) => (
+                                                <div key={i} className={`text-xs font-bold text-center mt-1 px-1 rounded shadow-sm ${msg.includes('-') ? 'bg-red-500 text-white' : 'bg-yellow-400 text-yellow-900'}`}>
+                                                    {msg}
+                                                </div>
+                                            ))}
+                                        </>
+                                    )}
                                 </div>
                             ))}
 
