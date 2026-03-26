@@ -21,6 +21,10 @@
             50% { opacity: 1; transform: scale(1.1) translateY(-5px); }
         }
         .animate-flicker { animation: flicker 0.5s infinite alternate; }
+        .fire-icon {
+            transition: filter 180ms linear, transform 180ms linear;
+            transform-origin: center bottom;
+        }
         body { background-color: #fffaf0; }
         .trough-bg { background-color: #f3e8d6; }
     </style>
@@ -51,8 +55,8 @@
         const COLS = 6;
         const FIRE_SPAWN_MIN = 20;
         const FIRE_SPAWN_MAX = 30;
-        const FIRE_SPREAD_MIN = 6;
-        const FIRE_SPREAD_MAX = 8;
+        const FIRE_SPREAD_INTERVAL = 15;
+        const FIRE_WARNING_WINDOW = 5;
         const SPATULA_MAX_CHARGES = 2;
         const SPATULA_PASSIVE_CHARGE_PER_SECOND = 1 / 30;
         const SPOILT_CHANCE = 0.12;
@@ -65,7 +69,7 @@
 
         const spawnFireSettings = () => ({
             untilSpawn: randomInt(FIRE_SPAWN_MIN, FIRE_SPAWN_MAX),
-            untilSpread: randomInt(FIRE_SPREAD_MIN, FIRE_SPREAD_MAX),
+            untilSpread: FIRE_SPREAD_INTERVAL,
         });
 
         const maybeSpoilIngredient = (ingredient) => {
@@ -192,13 +196,34 @@
             }
         };
 
-        const FireOverlayIcon = () => (
-            <svg viewBox="0 0 100 100" className="w-10 h-10 animate-flicker">
-                <path d="M50 90 Q30 90 20 70 Q10 50 30 30 Q50 0 70 30 Q90 50 80 70 Q70 90 50 90" fill="#f97316" />
-                <path d="M50 85 Q35 85 25 70 Q20 55 35 45 Q50 20 65 45 Q80 55 75 70 Q65 85 50 85" fill="#facc15" />
-                <path d="M50 80 Q40 80 35 70 Q30 60 40 55 Q50 40 60 55 Q70 60 65 70 Q60 80 50 80" fill="#ffffff" />
-            </svg>
-        );
+        const FireOverlayIcon = ({ untilSpread }) => {
+            const warningTimeLeft = Math.max(0, Math.min(FIRE_WARNING_WINDOW, untilSpread));
+            const warningProgress = 1 - (warningTimeLeft / FIRE_WARNING_WINDOW);
+            const inWarning = untilSpread <= FIRE_WARNING_WINDOW;
+            const flickerDuration = inWarning
+                ? `${Math.max(0.16, 0.45 - (warningProgress * 0.28)).toFixed(2)}s`
+                : '0.5s';
+            const flameLift = inWarning ? -4 - (warningProgress * 9) : -2;
+            const brightness = inWarning ? 1.05 + (warningProgress * 0.95) : 1;
+            const saturation = inWarning ? 1.05 + (warningProgress * 0.55) : 1;
+            const scale = inWarning ? 1 + (warningProgress * 0.22) : 1;
+
+            return (
+                <svg
+                    viewBox="0 0 100 100"
+                    className="w-10 h-10 animate-flicker fire-icon"
+                    style={{
+                        animationDuration: flickerDuration,
+                        transform: `translateY(${flameLift}px) scale(${scale})`,
+                        filter: `brightness(${brightness}) saturate(${saturation})`,
+                    }}
+                >
+                    <path d="M50 90 Q30 90 20 70 Q10 50 30 30 Q50 0 70 30 Q90 50 80 70 Q70 90 50 90" fill="#f97316" />
+                    <path d="M50 85 Q35 85 25 70 Q20 55 35 45 Q50 20 65 45 Q80 55 75 70 Q65 85 50 85" fill="#facc15" />
+                    <path d="M50 80 Q40 80 35 70 Q30 60 40 55 Q50 40 60 55 Q70 60 65 70 Q60 80 50 80" fill="#ffffff" />
+                </svg>
+            );
+        };
 
         const findBurger = (column) => {
             for (let i = column.length - 1; i >= 0; i--) {
@@ -298,6 +323,7 @@
             const [popups, setPopups] = useState([]);
             const [fireColumns, setFireColumns] = useState([]);
             const [fireTimers, setFireTimers] = useState(spawnFireSettings);
+            const [fireCycle, setFireCycle] = useState(0);
             const [spatulaCharge, setSpatulaCharge] = useState(0);
             const [spatulaPrimed, setSpatulaPrimed] = useState(false);
 
@@ -313,7 +339,7 @@
                 const prevCols = fireColumnsRef.current;
                 const prevTimers = fireTimersRef.current;
                 let nextCols = [...prevCols];
-                let untilSpread = prevTimers.untilSpread - 1;
+                let untilSpread = nextCols.length > 0 ? prevTimers.untilSpread - 1 : FIRE_SPREAD_INTERVAL;
                 let untilSpawn = prevTimers.untilSpawn - 1;
 
                 if (nextCols.length > 0 && untilSpread <= 0) {
@@ -323,14 +349,20 @@
                         nextCols.push(options[Math.floor(Math.random() * options.length)]);
                         nextCols.sort((a, b) => a - b);
                     }
-                    untilSpread = randomInt(FIRE_SPREAD_MIN, FIRE_SPREAD_MAX);
+                    untilSpread = FIRE_SPREAD_INTERVAL;
+                    setFireCycle(prev => prev + 1);
                 }
 
                 if (untilSpawn <= 0) {
                     const spawnable = Array.from({ length: COLS }, (_, i) => i).filter(i => !nextCols.includes(i));
                     if (spawnable.length > 0) {
+                        const hadNoFire = nextCols.length === 0;
                         nextCols.push(spawnable[Math.floor(Math.random() * spawnable.length)]);
                         nextCols.sort((a, b) => a - b);
+                        if (hadNoFire) {
+                            untilSpread = FIRE_SPREAD_INTERVAL;
+                            setFireCycle(prev => prev + 1);
+                        }
                     }
                     untilSpawn = randomInt(FIRE_SPAWN_MIN, FIRE_SPAWN_MAX);
                 }
@@ -338,6 +370,14 @@
                 setFireColumns(nextCols);
                 setFireTimers({ untilSpawn, untilSpread });
             }, []);
+
+            useEffect(() => {
+                if (gameOver || animating) return;
+                const timer = setInterval(() => {
+                    advanceFireTurn();
+                }, 1000);
+                return () => clearInterval(timer);
+            }, [gameOver, animating, advanceFireTurn]);
 
             useEffect(() => {
                 const isBoardEmpty = board.every(col => col.length === 0);
@@ -430,7 +470,6 @@
                         setClearingState(null);
                         setAnimating(false);
                     }, 500);
-                    advanceFireTurn();
                     return;
                 }
 
@@ -447,8 +486,7 @@
                 const nextQueue = [nextItems[1], getIngredientWithWeights(newBoardState)];
                 setActive(nextActive);
                 setNextItems(nextQueue);
-                advanceFireTurn();
-            }, [gameOver, animating, board, active, nextItems, fireColumns, advanceFireTurn, spatulaPrimed, spatulaCharge]);
+            }, [gameOver, animating, board, active, nextItems, fireColumns, spatulaPrimed, spatulaCharge]);
 
             const resetGame = () => {
                 const initialBoard = getInitialBoard();
@@ -461,6 +499,7 @@
                 setPopups([]);
                 setFireColumns([]);
                 setFireTimers(spawnFireSettings());
+                setFireCycle(0);
                 setSpatulaCharge(0);
                 setSpatulaPrimed(false);
             };
@@ -559,7 +598,7 @@
                                             })}
                                             {isBurning && (
                                                 <div className="absolute bottom-1 left-1/2 -translate-x-1/2 pointer-events-none">
-                                                    <FireOverlayIcon />
+                                                    <FireOverlayIcon key={`${colIndex}-${fireCycle}`} untilSpread={fireTimers.untilSpread} />
                                                 </div>
                                             )}
                                         </div>
