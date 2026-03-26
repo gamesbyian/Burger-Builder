@@ -45,7 +45,6 @@
             { type: 'ketchup', label: 'Ketchup', weight: 7 },
             { type: 'mustard', label: 'Mustard', weight: 7 },
             { type: 'mayo', label: 'Mayo', weight: 7 },
-            { type: 'spatula', label: 'Spatula', weight: 4 },
         ];
 
         const ROWS = 8;
@@ -54,6 +53,8 @@
         const FIRE_SPAWN_MAX = 30;
         const FIRE_SPREAD_MIN = 6;
         const FIRE_SPREAD_MAX = 8;
+        const SPATULA_MAX_CHARGES = 2;
+        const SPATULA_PASSIVE_CHARGE_PER_SECOND = 1 / 30;
         const SPOILT_CHANCE = 0.12;
         const SPOILT_PREFIXES = ['Rotten', 'Slimy', 'Moldy'];
         const SPOILABLE_TYPES = new Set([
@@ -275,6 +276,14 @@
             return { points: finalPoints, messages };
         };
 
+        const clampSpatulaCharge = (charge) => Math.max(0, Math.min(SPATULA_MAX_CHARGES, charge));
+
+        const calculateSpatulaChargeGain = (points) => {
+            const clearContribution = points / 1200;
+            const highScoreBonus = points >= 900 ? 0.35 : points >= 650 ? 0.2 : 0;
+            return clearContribution + highScoreBonus;
+        };
+
         function App() {
             const [board, setBoard] = useState(getInitialBoard);
             const [active, setActive] = useState(() => getIngredientWithWeights(getInitialBoard()));
@@ -289,6 +298,8 @@
             const [popups, setPopups] = useState([]);
             const [fireColumns, setFireColumns] = useState([]);
             const [fireTimers, setFireTimers] = useState(spawnFireSettings);
+            const [spatulaCharge, setSpatulaCharge] = useState(0);
+            const [spatulaPrimed, setSpatulaPrimed] = useState(false);
 
             // Ref to track state for async closures
             const boardRef = useRef(board);
@@ -340,14 +351,22 @@
                 if (allFull && !animating) {
                     const canMove = board.some((col, colIdx) => {
                         const isBurning = fireColumns.includes(colIdx);
-                        if (active.type === 'spatula') return true;
+                        if (spatulaPrimed) return true;
                         if (isBurning) return false;
                         if (active.type === 'top_bun') return findBurger([...col, active]) !== null;
                         return false;
                     });
                     if (!canMove) setGameOver(true);
                 }
-            }, [board, active, animating, fireColumns]);
+            }, [board, active, animating, fireColumns, spatulaPrimed]);
+
+            useEffect(() => {
+                if (gameOver) return;
+                const timer = setInterval(() => {
+                    setSpatulaCharge(prev => clampSpatulaCharge(prev + SPATULA_PASSIVE_CHARGE_PER_SECOND));
+                }, 1000);
+                return () => clearInterval(timer);
+            }, [gameOver]);
 
             useEffect(() => {
                 if (animating || gameOver) return;
@@ -359,6 +378,7 @@
                         const slice = board[col].slice(match.startIndex, match.endIndex + 1);
                         const { points, messages } = calculateScore(slice);
                         setScore(s => s + points);
+                        setSpatulaCharge(prev => clampSpatulaCharge(prev + calculateSpatulaChargeGain(points)));
                         const popupId = crypto.randomUUID();
                         setPopups(p => [...p, { id: popupId, col, points, messages }]);
                         setTimeout(() => setPopups(p => p.filter(popup => popup.id !== popupId)), 2000);
@@ -384,10 +404,16 @@
                 const col = board[colIndex];
                 const isBurning = fireColumns.includes(colIndex);
 
-                if (isBurning && active.type !== 'spatula') return;
+                if (isBurning && !spatulaPrimed) return;
                 
-                if (active.type === 'spatula') {
+                if (spatulaPrimed) {
+                    if (spatulaCharge < 1) {
+                        setSpatulaPrimed(false);
+                        return;
+                    }
                     setAnimating(true);
+                    setSpatulaCharge(prev => clampSpatulaCharge(prev - 1));
+                    setSpatulaPrimed(false);
                     // Spatulas always extinguish fire in their target column
                     if (isBurning) {
                         setFireColumns(prev => prev.filter(idx => idx !== colIndex));
@@ -404,11 +430,6 @@
                         setClearingState(null);
                         setAnimating(false);
                     }, 500);
-                    
-                    const nextActive = nextItems[0];
-                    const nextQueue = [nextItems[1], getIngredientWithWeights(boardRef.current)];
-                    setActive(nextActive);
-                    setNextItems(nextQueue);
                     advanceFireTurn();
                     return;
                 }
@@ -427,7 +448,7 @@
                 setActive(nextActive);
                 setNextItems(nextQueue);
                 advanceFireTurn();
-            }, [gameOver, animating, board, active, nextItems, fireColumns, advanceFireTurn]);
+            }, [gameOver, animating, board, active, nextItems, fireColumns, advanceFireTurn, spatulaPrimed, spatulaCharge]);
 
             const resetGame = () => {
                 const initialBoard = getInitialBoard();
@@ -440,16 +461,47 @@
                 setPopups([]);
                 setFireColumns([]);
                 setFireTimers(spawnFireSettings());
+                setSpatulaCharge(0);
+                setSpatulaPrimed(false);
             };
+
+            const spatulaChargesAvailable = Math.floor(spatulaCharge);
+            const spatulaProgressPercent = Math.round((spatulaCharge % 1) * 100);
+            const spatulaReady = spatulaChargesAvailable > 0;
 
             return (
                 <div className="min-h-screen flex flex-col items-center justify-center p-4">
                     <div className="w-full max-w-md flex justify-between items-end mb-6">
                         <div>
                             <h1 className="text-3xl font-black text-orange-900 leading-none mb-1 uppercase tracking-tight">Burger Builder</h1>
-                            <p className="text-orange-700 font-bold text-xl bg-orange-200 inline-block px-3 py-1 rounded-full shadow-sm">
-                                {score.toLocaleString()}
-                            </p>
+                            <div className="flex items-center gap-3">
+                                <p className="text-orange-700 font-bold text-xl bg-orange-200 inline-block px-3 py-1 rounded-full shadow-sm">
+                                    {score.toLocaleString()}
+                                </p>
+                                <button
+                                    className={`relative overflow-hidden px-3 py-2 rounded-xl border-2 font-black text-xs uppercase tracking-wide transition-all
+                                        ${spatulaPrimed
+                                            ? 'bg-sky-600 border-sky-700 text-white shadow-lg scale-105'
+                                            : spatulaReady
+                                                ? 'bg-sky-100 border-sky-300 text-sky-900 hover:bg-sky-200'
+                                                : 'bg-slate-100 border-slate-300 text-slate-500 cursor-not-allowed'
+                                        }`}
+                                    disabled={!spatulaReady}
+                                    onClick={() => setSpatulaPrimed(prev => !prev)}
+                                >
+                                    <div
+                                        className="absolute bottom-0 left-0 h-full bg-sky-300/60 transition-all duration-500"
+                                        style={{ width: `${spatulaReady ? 100 : spatulaProgressPercent}%` }}
+                                    />
+                                    <div className="relative flex items-center gap-2">
+                                        <div className="w-5 h-5"><IngredientIcon type="spatula" /></div>
+                                        <span>{spatulaPrimed ? 'Primed' : 'Spatula'}</span>
+                                        <span className="bg-white/80 text-sky-900 rounded-full min-w-5 h-5 px-1 flex items-center justify-center">
+                                            {spatulaChargesAvailable}
+                                        </span>
+                                    </div>
+                                </button>
+                            </div>
                         </div>
 
                         <div className="flex flex-col items-end">
@@ -482,9 +534,9 @@
                                     const colIsFull = col.length >= ROWS;
                                     const isBurning = fireColumns.includes(colIndex);
                                     const canDropCrown = colIsFull && active.type === 'top_bun' && findBurger([...col, active]);
-                                    const canDropSpatula = active.type === 'spatula';
+                                    const canDropSpatula = spatulaPrimed && spatulaCharge >= 1;
                                     const isDisabled = colIsFull && !canDropCrown && !canDropSpatula;
-                                    const blockedByFire = isBurning && active.type !== 'spatula';
+                                    const blockedByFire = isBurning && !canDropSpatula;
                                     
                                     return (
                                         <div 
@@ -545,7 +597,8 @@
                     </div>
 
                     <div className="mt-8 text-center text-orange-800/60 font-medium max-w-sm text-sm">
-                        <p><strong>Spatulas</strong> clear a whole column and leave a heel bun.</p>
+                        <p><strong>Spatula tool:</strong> charges over time and from burger clears.</p>
+                        <p>Prime it with the button, then tap a column to clear it and leave a heel bun.</p>
                         <p>If the whole tray clears, you get a fresh row of heels.</p>
                     </div>
                 </div>
